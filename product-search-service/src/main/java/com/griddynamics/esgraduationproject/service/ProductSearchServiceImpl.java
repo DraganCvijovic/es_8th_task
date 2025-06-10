@@ -76,19 +76,15 @@ public class ProductSearchServiceImpl implements ProductSearchService {
 
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
 
-        // Build query
         BoolQueryBuilder boolQuery = buildQuery(request.getTextQuery());
         sourceBuilder.query(boolQuery);
 
-        // Add sorting
         sourceBuilder.sort("_score", SortOrder.DESC);
         sourceBuilder.sort("id", SortOrder.DESC);
 
-        // Add pagination
         sourceBuilder.from(request.getPage() * request.getSize());
         sourceBuilder.size(request.getSize());
 
-        // Add aggregations
         addAggregations(sourceBuilder);
 
         org.elasticsearch.action.search.SearchRequest searchRequest =
@@ -225,92 +221,5 @@ public class ProductSearchServiceImpl implements ProductSearchService {
         }
 
         return boolQuery;
-    }
-
-    public void recreateIndex() throws IOException {
-        String alias = "product_index";
-        String newIndexName = alias + "_" + System.currentTimeMillis();
-
-        // 1. Create new index with settings and mappings
-        String settings = getStrFromResource(productSettingsFile);
-        String mappings = getStrFromResource(productMappingsFile);
-        createIndex(newIndexName, settings, mappings);
-
-        // 2. Bulk index data
-        bulkIndex(newIndexName);
-
-        // 3. Update alias
-        updateAlias(alias, newIndexName);
-
-        // 4. Clean up old indices
-        cleanOldIndices(alias, 3);
-    }
-
-    private void bulkIndex(String indexName) throws IOException {
-        BulkRequest bulkRequest = new BulkRequest();
-        InputStream is = getClass().getClassLoader().getResourceAsStream("task_8_data.json");
-        List<Map<String, Object>> products = objectMapper.readValue(is, new TypeReference<List<Map<String, Object>>>() {});
-        for (Map<String, Object> product : products) {
-            bulkRequest.add(new IndexRequest(indexName).source(product));
-        }
-        esClient.bulk(bulkRequest, RequestOptions.DEFAULT);
-    }
-
-    private void updateAlias(String alias, String newIndex) throws IOException {
-        GetAliasesRequest getAliasesRequest = new GetAliasesRequest(alias);
-        Set<String> oldIndices = esClient.indices().getAlias(getAliasesRequest, RequestOptions.DEFAULT)
-                .getAliases().keySet();
-
-        IndicesAliasesRequest request = new IndicesAliasesRequest();
-        for (String oldIndex : oldIndices) {
-            request.addAliasAction(new AliasActions(AliasActions.Type.REMOVE).index(oldIndex).alias(alias));
-        }
-        request.addAliasAction(new AliasActions(AliasActions.Type.ADD).index(newIndex).alias(alias));
-
-        esClient.indices().updateAliases(request, RequestOptions.DEFAULT);
-    }
-
-    private void cleanOldIndices(String alias, int maxIndices) throws IOException {
-        GetIndexRequest request = new GetIndexRequest(alias + "_*");
-        String[] allIndices = esClient.indices().get(request, RequestOptions.DEFAULT).getIndices();
-        List<String> sorted = Arrays.stream(allIndices)
-                .sorted(Comparator.reverseOrder()) // newest first
-                .collect(Collectors.toList());
-
-        List<String> toDelete = sorted.stream().skip(maxIndices).collect(Collectors.toList());
-        if (!toDelete.isEmpty()) {
-            DeleteIndexRequest deleteIndexRequest = new DeleteIndexRequest(toDelete.toArray(new String[0]));
-            esClient.indices().delete(deleteIndexRequest, RequestOptions.DEFAULT);
-        }
-    }
-
-    private static String getStrFromResource(Resource resource) {
-        try {
-            if (!resource.exists()) {
-                throw new IllegalArgumentException("File not found: " + resource.getFilename());
-            }
-            return Resources.toString(resource.getURL(), Charsets.UTF_8);
-        } catch (IOException ex) {
-            throw new IllegalArgumentException("Can not read resource file: " + resource.getFilename(), ex);
-        }
-    }
-
-    private void createIndex(String indexName, String settings, String mappings) {
-        CreateIndexRequest createIndexRequest = new CreateIndexRequest(indexName)
-                .settings(settings, XContentType.JSON)
-                .mapping(mappings, XContentType.JSON);
-
-        CreateIndexResponse createIndexResponse;
-        try {
-            createIndexResponse = esClient.indices().create(createIndexRequest, RequestOptions.DEFAULT);
-        } catch (IOException ex) {
-            throw new RuntimeException("An error occurred during creating ES index.", ex);
-        }
-
-        if (!createIndexResponse.isAcknowledged()) {
-            throw new RuntimeException("Creating index not acknowledged for indexName: " + indexName);
-        } else {
-            log.info("Index {} has been created.", indexName);
-        }
     }
 }

@@ -7,6 +7,4 @@ import java.io.IOException;
 
 public interface ProductSearchService {
     ProductSearchResponse getServiceResponse(ProductSearchRequest request) throws IOException;
-
-    void recreateIndex() throws IOException;
 }
