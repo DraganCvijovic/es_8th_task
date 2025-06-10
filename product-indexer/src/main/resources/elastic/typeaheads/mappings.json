@@ -1,0 +1,40 @@
+{
+  "properties": {
+    "id": { "type": "long" },
+    "brand": {
+      "type": "text",
+      "analyzer": "text_analyzer",
+      "fields": {
+        "shingles": {
+          "type": "text",
+          "analyzer": "shingle_analyzer"
+        },
+        "keyword": {
+          "type": "keyword"
+        }
+      }
+    },
+    "name": {
+      "type": "text",
+      "analyzer": "text_analyzer",
+      "fields": {
+        "shingles": {
+          "type": "text",
+          "analyzer": "shingle_analyzer"
+        }
+      }
+    },
+    "price": { "type": "double" },
+    "skus": {
+      "type": "nested",
+      "properties": {
+        "color": {
+          "type": "keyword"
+        },
+        "size": {
+          "type": "keyword"
+        }
+      }
+    }
+  }
+}
